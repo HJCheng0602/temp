@@ -1,0 +1,73 @@
+{
+  "version": "0.3.1.dev7+g8538017f4",
+  "files": {
+    "model_executor/warmup/kernel_warmup.py": {
+      "before": "c84140313b52fb06b49719d7250330e8c5d16eda5ef41c24c4b22b01834d5fc6",
+      "after": "8eb38468fcfa56b15e895bd9b24f74ec27c4308a3721d0b9e11e4ce6f0fce0e4"
+    },
+    "models/deepseek_v41/attention.py": {
+      "before": "88c47493149406249a195bf9e316ab3c63154ce82001f90dcde5b0e8be137069",
+      "after": "e8802fd3cf1f144f511c3657e5244776f15df4575628956207c04081d3544262"
+    },
+    "models/deepseek_v41/nvidia/flashinfer_sparse.py": {
+      "before": "ab46e315f8a41430fc170e7a6b8397e12b7695ac0651b984e35a3a610305152a",
+      "after": "3b7b0567f64a680dc6f6035b832f68439027e3f4413213e00143cc11b94adc3a"
+    },
+    "models/deepseek_v41/nvidia/model.py": {
+      "before": "51e40463b6ce3a76ad64a09b6bbdf4688cae468d316f426d9d394fcff08b146e",
+      "after": "50dbc5c21da791069500cefd97a7bbf56ecbc8a8e1ab23b17c16fee2bb332503"
+    },
+    "v1/attention/backends/mla/indexer.py": {
+      "before": "e459a938fb1467d2248667b2fde7fde66e893353e5edb7b9245ef5736c6ea4c5",
+      "after": "18696770eccd3cbab98580b64bfa9b6cf5a0d6d5a6989205919dfc3c576e4970"
+    },
+    "v1/engine/core.py": {
+      "before": "a2aaa350f782ddc2297524dcb1dbd987ffce83cff934c2d79465b15a643879bf",
+      "after": "fe2b5a45587d6fdcf2ebbc37b811697573c05fb4da9dc2fa4f45fc8f7f0e1f21"
+    },
+    "v1/worker/gpu/model_runner.py": {
+      "before": "9edf2c3ee948df7dfa50e2f8fccf8ad8df2d7ad6628a3b05db78dd282f371a98",
+      "after": "24decd2f826a282a4f0bea02cfeb6cffaa3363b016b2c7c33188d88c4cf7d6c7"
+    },
+    "v1/worker/gpu/model_states/interface.py": {
+      "before": "5675b6fedc7403a9ab410b1e5565974e78fac23c42ab4253ae1da52d6e09b594",
+      "after": "527d9c79b63192f20bed73791abf3c44cd222fb25fb665d0dba93a223cd73f90"
+    },
+    "v1/worker/gpu/model_states/mamba_hybrid.py": {
+      "before": "573e130ac5587d4822fabf97adad1ad0fda02ff83c5e70df879a5bb175ae845c",
+      "after": "75e5660b6be5376c762f6d483374c080e8666427575ae017b2474747aeddab96"
+    },
+    "v1/worker/gpu/pp_utils.py": {
+      "before": "bde526ae73ba7c8406f7dc3728d5bc5cc14bf56093e5d0fce7e0900d21d2f02d",
+      "after": "f87d647099d4bc85110ad4a426cafc6732a0861fa26a5e2625f0b031c3dedb12"
+    },
+    "v1/worker/gpu/warmup.py": {
+      "before": "423ac32d58fe008c228cfa223e4fcebfcf87e3463a9dbdf80a083c0578d73723",
+      "after": "4e730c238a90985e3712962c63e95eef280a80438e6b9924ad562a4ad3877621"
+    },
+    "v1/worker/gpu_worker.py": {
+      "before": "36bc45ba6972b825081f081f5c84de26d0454f465a76e8a60748a8fd84fc1d72",
+      "after": "71862984fcdc381787699d1c488ce9d3daf0d05fa5faa711b38dbcb00e627431"
+    },
+    "v1/worker/utils.py": {
+      "before": "3351a0410ac1c1635ece84881679e491df5cd531b0b3d419f0a1990af5896892",
+      "after": "4b52c0dcc6ea694b38ec2ee8508d798a3edd545ad2825a48b0c68b53869d9d1d"
+    },
+    "v1/worker/worker_base.py": {
+      "before": "f0958160b39e23971d1fd9f174f83b1c484b0443d8ab8bd0d494b06807cf403e",
+      "after": "8576e5c32e9f2c096495954cb75847e8ccc0ea44b11ddbdc0571d1ea99194e90"
+    },
+    "v1/worker/gpu/pp8_stage_timer.py": {
+      "before": null,
+      "after": "a0ff32d15453b7f1d7249f6f518b91a221897f55952dfb5c3c743b1a8a2915c2"
+    },
+    "v1/worker/gpu/pp2_graph_probe.py": {
+      "before": null,
+      "after": "294037909666012c758a56f40380ca0317380e0eea450da4ff661b59fa2fead3"
+    },
+    "models/deepseek_v41/nvidia/pp_replay.py": {
+      "before": null,
+      "after": "bdfd00b8e5db95f1c97bb113276a4217a20a0066c6c654254de7fba7273f0e3b"
+    }
+  }
+}

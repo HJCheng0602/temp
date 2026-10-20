@@ -1,0 +1,46 @@
+--- /home/admin/dsv41-vllm-20260917/patches/sm120-pages/models/deepseek_v41/attention.py
++++ /home/admin/dsv41-vllm-20260917/env/lib/python3.12/site-packages/vllm/models/deepseek_v41/attention.py
+@@ -184,6 +184,8 @@
+     backend_cls: ClassVar[type[AttentionBackend]]
+     # Backend for the SWA cache layer; None uses the default SWA backend.
+     swa_backend_cls: ClassVar[type[AttentionBackend] | None] = None
++    swa_page_tokens: ClassVar[int] = 32
++    compressed_page_states: ClassVar[int | None] = None
+     # KV-cache per-token block format (both layouts are paged). True (default)
+     # = fp8_ds_mla (UE8M0 block-scaled fp8 packed as uint8); False = plain
+     # bf16 / per-tensor fp8 KV row. Backends can override the instance hook when
+@@ -519,7 +521,7 @@
+             prefix=f"{prefix}.swa_cache",
+             cache_config=cache_config,
+             backend_cls=self.swa_backend_cls,
+-            block_size=32,
++            block_size=self.swa_page_tokens,
+             packed_bytes_per_token=self.swa_bytes_per_token,
+             packed_page_alignment=self.kv_page_alignment,
+         )
+@@ -1041,7 +1043,11 @@
+         # use natural element-size pages.
+         uses_fp8_ds_mla_layout = self.kv_cache_dtype in ("fp8_ds_mla", "nvfp4_ds_mla")
+         return MLAAttentionSpec(
+-            block_size=vllm_config.cache_config.block_size,
++            block_size=(
++                self.compressed_page_states * self.compress_ratio
++                if self.compressed_page_states is not None
++                else vllm_config.cache_config.block_size
++            ),
+             num_kv_heads=1,
+             head_size=self.head_dim,
+             dtype=torch.uint8 if uses_fp8_ds_mla_layout else self.kv_cache_torch_dtype,
+@@ -1107,7 +1113,11 @@
+             576 if uses_fp8_ds_mla_layout and not _use_v41_mxfp8_kv_record() else 512
+         )
+         return MLAAttentionSpec(
+-            block_size=self.cache_config.block_size,
++            block_size=(
++                64 * self.compress_ratio
++                if current_platform.is_device_capability_family(120)
++                else self.cache_config.block_size
++            ),
+             num_kv_heads=1,
+             head_size=self.head_dim,
+             dtype=self.dtype,

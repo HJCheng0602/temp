@@ -1,0 +1,494 @@
+[
+  {
+    "status": "ok",
+    "result": {
+      "enabled": true,
+      "profile": false,
+      "verification": [
+        {
+          "shape": [
+            8192,
+            1152,
+            5120
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            1792,
+            5120
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            576
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            2048
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            8192,
+            1280
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        }
+      ],
+      "calls": 400,
+      "selected_calls": 400,
+      "shapes": [
+        {
+          "shape": [
+            8192,
+            1152,
+            5120
+          ],
+          "tactic": 5,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            1792,
+            5120
+          ],
+          "tactic": 5,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            576
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            2048
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            8192,
+            1280
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        }
+      ]
+    }
+  },
+  {
+    "status": "ok",
+    "result": {
+      "enabled": true,
+      "profile": false,
+      "verification": [
+        {
+          "shape": [
+            8192,
+            1152,
+            5120
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            1792,
+            5120
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            576
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            2048
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            8192,
+            1280
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        }
+      ],
+      "calls": 400,
+      "selected_calls": 400,
+      "shapes": [
+        {
+          "shape": [
+            8192,
+            1152,
+            5120
+          ],
+          "tactic": 5,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            1792,
+            5120
+          ],
+          "tactic": 5,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            576
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            2048
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            8192,
+            1280
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        }
+      ]
+    }
+  },
+  {
+    "status": "ok",
+    "result": {
+      "enabled": true,
+      "profile": false,
+      "verification": [
+        {
+          "shape": [
+            8192,
+            1152,
+            5120
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            1792,
+            5120
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            576
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            2048
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            8192,
+            1280
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        }
+      ],
+      "calls": 400,
+      "selected_calls": 400,
+      "shapes": [
+        {
+          "shape": [
+            8192,
+            1152,
+            5120
+          ],
+          "tactic": 5,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            1792,
+            5120
+          ],
+          "tactic": 5,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            576
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            2048
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            8192,
+            1280
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        }
+      ]
+    }
+  },
+  {
+    "status": "ok",
+    "result": {
+      "enabled": true,
+      "profile": false,
+      "verification": [
+        {
+          "shape": [
+            8192,
+            1152,
+            5120
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            1792,
+            5120
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            576
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            2048
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        },
+        {
+          "shape": [
+            8192,
+            8192,
+            1280
+          ],
+          "calls": 80,
+          "equal_calls": 80,
+          "finite_calls": 80,
+          "max_abs": 0.0,
+          "max_relative_l2": 0.0
+        }
+      ],
+      "calls": 400,
+      "selected_calls": 400,
+      "shapes": [
+        {
+          "shape": [
+            8192,
+            1152,
+            5120
+          ],
+          "tactic": 5,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            1792,
+            5120
+          ],
+          "tactic": 5,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            576
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            5120,
+            2048
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        },
+        {
+          "shape": [
+            8192,
+            8192,
+            1280
+          ],
+          "tactic": 4,
+          "calls": 80,
+          "event_sum_ms": null
+        }
+      ]
+    }
+  }
+]

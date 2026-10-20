@@ -1,0 +1,66 @@
+{
+  "flashinfer_version": "0.7.1",
+  "capability": [
+    12,
+    0
+  ],
+  "scope": "Exact M=8192 ordinary prefill projections; BF16 output; FP8 inputs; existing CUTLASS runner",
+  "source_measurement_sha256": "74f097a2579cd2d9ed5929437f6a9b3432ad2ce28102bbfc5e6182583a4b66b1",
+  "entries": [
+    {
+      "shape": [
+        8192,
+        1792,
+        5120
+      ],
+      "tactic": 5,
+      "name": "WqaWkv",
+      "default_us": 523.5520005226135,
+      "selected_us": 335.097998380661
+    },
+    {
+      "shape": [
+        8192,
+        8192,
+        1280
+      ],
+      "tactic": 4,
+      "name": "Wqb",
+      "default_us": 604.3760180473328,
+      "selected_us": 395.2679932117462
+    },
+    {
+      "shape": [
+        8192,
+        5120,
+        2048
+      ],
+      "tactic": 4,
+      "name": "Wo_b",
+      "default_us": 603.298008441925,
+      "selected_us": 383.1219971179962
+    },
+    {
+      "shape": [
+        8192,
+        1152,
+        5120
+      ],
+      "tactic": 5,
+      "name": "SharedUp",
+      "default_us": 335.5880081653595,
+      "selected_us": 223.5880047082901
+    },
+    {
+      "shape": [
+        8192,
+        5120,
+        576
+      ],
+      "tactic": 4,
+      "name": "SharedDown",
+      "default_us": 203.6460041999817,
+      "selected_us": 136.89200580120087
+    }
+  ]
+}

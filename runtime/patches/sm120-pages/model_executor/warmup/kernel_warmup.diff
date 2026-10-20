@@ -1,0 +1,19 @@
+--- /home/admin/dsv41-vllm-20260917/patches/sm120-pages/model_executor/warmup/kernel_warmup.py
++++ /home/admin/dsv41-vllm-20260917/env/lib/python3.12/site-packages/vllm/model_executor/warmup/kernel_warmup.py
+@@ -383,9 +383,13 @@
+     from flashinfer.autotuner import AutoTuner, set_autotune_process_group
+ 
+     import vllm.utils.flashinfer as fi_utils
+-    from vllm.distributed.parallel_state import get_world_group
+-
+-    world = get_world_group()
++    from vllm.distributed.parallel_state import get_tp_group
++
++    # Pipeline stages execute different layers and GEMM shapes.
++    # Synchronizing FlashInfer tactics over the global world makes
++    # their collective sequences diverge and deadlock. A TP group
++    # contains ranks executing the same stage and shape sequence.
++    world = get_tp_group()
+     is_leader = world.rank_in_group == 0
+     tuner = AutoTuner.get()
+ 

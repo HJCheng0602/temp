@@ -1,0 +1,40 @@
+--- /home/admin/dsv41-vllm-20260917/patches/sm120-pages/models/deepseek_v41/nvidia/model.py
++++ /home/admin/dsv41-vllm-20260917/env/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/model.py
+@@ -606,6 +606,10 @@
+                     dtype=dtype,
+                     device=device,
+                 ),
++                # V4 MoE routing needs token ids on every PP stage.
++                "input_ids": torch.zeros(
++                    (batch_size,), dtype=torch.int32, device=device
++                ),
+                 "pre_mix": torch.zeros(
+                     (batch_size, self.hc_mult),
+                     dtype=torch.float32,
+@@ -630,7 +634,12 @@
+         else:
+             assert intermediate_tensors is not None
+             hidden_states = intermediate_tensors["hidden_states"]
+-
++            # The PP dummy/profile path does not provide input_ids to
++            # non-first ranks through the model call. Carry them with
++            # the stage output so vision/hash MoE routing remains valid.
++            input_ids = intermediate_tensors["input_ids"]
++
++        pp_input_ids = input_ids
+         if self.use_mega_moe:
+             input_ids = input_ids.to(torch.int64)
+ 
+@@ -753,7 +762,11 @@
+ 
+         if not get_pp_group().is_last_rank:
+             return IntermediateTensors(
+-                {"hidden_states": hidden_states, "pre_mix": pre_mix}
++                {
++                    "hidden_states": hidden_states,
++                    "pre_mix": pre_mix,
++                    "input_ids": pp_input_ids,
++                }
+             )
+ 
+         # MTP needs full HC states; otherwise collapse and normalize locally

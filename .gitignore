@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.so
+*.pt
+*.nsys-rep
+*.sqlite
+*.log
+*.bundle
+
+._*
+.DS_Store
+/runtime/gemm_candidates_20260927/fi070/

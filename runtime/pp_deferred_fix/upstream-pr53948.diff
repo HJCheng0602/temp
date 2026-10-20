@@ -1,0 +1,793 @@
+diff --git a/tests/v1/engine/test_engine_core.py b/tests/v1/engine/test_engine_core.py
+index e16e0550c21d..bed0adf8a40a 100644
+--- a/tests/v1/engine/test_engine_core.py
++++ b/tests/v1/engine/test_engine_core.py
+@@ -693,8 +693,7 @@ def test_kv_cache_release_rejects_unsafe_state(pause_state, has_requests, has_ba
+ 
+ @pytest.mark.parametrize("deferred", [False, True])
+ def test_pause_synchronizes_device_before_cache_reset(deferred: bool):
+-    """A resolved pause promises an idle device: the barrier must run before
+-    caches are cleared and before the caller is unblocked."""
++    """A pause flushes PP receives before its device and cache barriers."""
+     core = _pausable_engine_core_proc()
+     core.engines_running = deferred
+     order: list[str] = []
+@@ -710,4 +709,8 @@ def test_pause_synchronizes_device_before_cache_reset(deferred: bool):
+         assert result.result(timeout=0) is None
+     else:
+         assert result is None
+-    assert order == ["synchronize_device", "reset_caches"]
++    assert order == [
++        "flush_pending_collectives",
++        "synchronize_device",
++        "reset_caches",
++    ]
+diff --git a/tests/v1/worker/test_mamba_hybrid_model_state.py b/tests/v1/worker/test_mamba_hybrid_model_state.py
+index 19f77c13e6df..b559f040b17d 100644
+--- a/tests/v1/worker/test_mamba_hybrid_model_state.py
++++ b/tests/v1/worker/test_mamba_hybrid_model_state.py
+@@ -23,6 +23,7 @@
+ from vllm.v1.worker.gpu.model_states import mamba_hybrid
+ from vllm.v1.worker.gpu.model_states.mamba_hybrid import MambaHybridModelState
+ from vllm.v1.worker.gpu.model_states.recoverssm import RecoverSSMState
++from vllm.v1.worker.mamba_utils import MambaSpecDecodeGPUContext
+ 
+ 
+ def test_prepare_attn_forwards_positions(monkeypatch: pytest.MonkeyPatch) -> None:
+@@ -161,6 +162,53 @@ def test_postprocess_state_scalar_with_int32_mapping(
+     torch.testing.assert_close(state.num_accepted_tokens_gpu, expected)
+ 
+ 
++@pytest.mark.skipif(not current_platform.is_cuda(), reason="Requires CUDA")
++def test_pp_warmup_postprocess_is_state_neutral() -> None:
++    device = torch.device("cuda")
++    recurrent_state = torch.full((2, 8), 7, dtype=torch.float32, device=device)
++    block_table = torch.tensor([[0, 1]], dtype=torch.int32, device=device)
++
++    def tensor(values: list[int], dtype: torch.dtype) -> torch.Tensor:
++        return torch.tensor(values, dtype=dtype, device=device)
++
++    ctx = MambaSpecDecodeGPUContext(
++        state_base_addrs=tensor([recurrent_state.data_ptr()], torch.int64),
++        state_block_strides=tensor(
++            [recurrent_state.stride(0) * recurrent_state.element_size()], torch.int64
++        ),
++        state_elem_sizes=tensor([recurrent_state.element_size()], torch.int32),
++        state_inner_sizes=tensor([recurrent_state.shape[1]], torch.int64),
++        state_conv_widths=tensor([0], torch.int32),
++        state_group_indices=tensor([0], torch.int32),
++        state_dim_row_count=tensor([0], torch.int32),
++        state_dim_row_stride=tensor([0], torch.int64),
++        block_size=8,
++        num_states=1,
++        mamba_group_ids=[0],
++        num_groups=1,
++        num_accepted_tokens_out=torch.zeros(4, dtype=torch.int32, device=device),
++        block_table_ptrs=tensor([block_table.data_ptr()], torch.int64),
++        block_table_stride_req=block_table.stride(0),
++        is_initialized=True,
++    )
++    state = object.__new__(MambaHybridModelState)
++    state.num_accepted_tokens_gpu = tensor([9, 8, 7, 6], torch.int32)
++    state._align_mode = True
++    state._mamba_ctx = ctx
++    state._mamba_state_idx_gpu = tensor([0, 0, 0, 0], torch.int32)
++
++    accepted_before = state.num_accepted_tokens_gpu.clone()
++    recurrent_before = recurrent_state.clone()
++    state.warmup_postprocess_state(
++        tensor([-1], torch.int64),
++        tensor([3], torch.int32),
++        tensor([8, 8, 8, 8], torch.int32),
++    )
++
++    torch.testing.assert_close(state.num_accepted_tokens_gpu, accepted_before)
++    torch.testing.assert_close(recurrent_state, recurrent_before)
++
++
+ def test_recoverssm_commits_accepted_window_after_v2_sampling() -> None:
+     state = RecoverSSMState()
+     metadata = Mock(spec=RecoverSSMMetadata)
+diff --git a/tests/v1/worker/test_pp_utils.py b/tests/v1/worker/test_pp_utils.py
+index cfc92479f57e..a8dd1c3751f5 100644
+--- a/tests/v1/worker/test_pp_utils.py
++++ b/tests/v1/worker/test_pp_utils.py
+@@ -2,11 +2,30 @@
+ # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+ """Which rows the PP sampled-token broadcast must carry."""
+ 
+-from unittest.mock import Mock
++from collections import deque
++from contextlib import nullcontext
++from unittest.mock import Mock, call
+ 
+ import numpy as np
++import pytest
++import torch
+ 
+-from vllm.v1.worker.gpu import pp_utils
++from vllm.v1.worker.gpu import model_runner, pp_utils
++from vllm.v1.worker.gpu.pp_utils import PPHandler
++
++
++def _cuda_handler(max_sample_len=6):
++    handler = object.__new__(PPHandler)
++    handler.is_last_rank = True
++    handler.max_sample_len = max_sample_len
++    handler.num_speculative_steps = max_sample_len - 1
++    handler.recv_launch_delay = 0
++    handler.last_rank = 1
++    handler.broadcast_group = Mock()
++    handler.device = torch.device("cuda")
++    handler.main_stream = torch.cuda.current_stream()
++    handler.broadcast_stream = torch.cuda.Stream()
++    return handler
+ 
+ 
+ def _batch(num_computed, prefill_len, num_scheduled):
+@@ -81,3 +100,114 @@ def test_decode_row_ahead_of_a_prefill_chunk():
+ 
+     assert mask is not None
+     assert mask.tolist() == [True, False]
++
++
++def test_deferred_receive_cadence_fifo_and_flush():
++    handler = PPHandler.__new__(PPHandler)
++    slots = [Mock(launched=False) for _ in range(3)]
++    handler.queue = deque([None, slots[0], slots[1], slots[2]])
++    handler.recv_launch_delay = 3
++    handler.pending_post_model_receive = None
++    handler.is_last_rank = False
++    handler._launch_receive = Mock(
++        side_effect=lambda slot: setattr(slot, "launched", True)
++    )
++
++    handler._advance_receive_queue()
++    handler._advance_receive_queue()  # Launches the older pending slot first.
++    handler.launch_post_model_receive()
++    handler.flush_pending_collectives()
++    handler.flush_pending_collectives()
++
++    assert handler._launch_receive.call_args_list == [
++        call(slots[0]),
++        call(slots[1]),
++        call(slots[2]),
++    ]
++
++
++def test_receive_launch_is_idempotent_when_cpu_event_is_none(monkeypatch):
++    handler = PPHandler.__new__(PPHandler)
++    handler.main_stream, handler.broadcast_stream = Mock(), Mock()
++    handler.broadcast_stream.record_event.return_value = None
++    handler.last_rank, handler.broadcast_group = 3, Mock()
++    tensors = [Mock(), Mock(), Mock()]
++    slot = Mock(
++        launched=False,
++        event=None,
++        sampled_tokens=tensors[0],
++        combined=tensors[1],
++        draft_tokens=tensors[2],
++    )
++    broadcast = Mock()
++    monkeypatch.setattr(torch.cuda, "stream", lambda _: nullcontext())
++    monkeypatch.setattr(torch.distributed, "broadcast", broadcast)
++
++    handler._launch_receive(slot)
++    handler._launch_receive(slot)
++
++    assert slot.launched
++    handler.broadcast_stream.wait_stream.assert_called_once_with(handler.main_stream)
++    assert [item.args[0] for item in broadcast.call_args_list] == tensors
++
++
++def test_alloc_combined_keeps_unbind_views_16_byte_aligned():
++    for num_reqs in range(1, 9):
++        combined = pp_utils._alloc_combined(num_reqs, torch.device("cpu"))
++        num_sampled, num_rejected = combined.unbind(dim=0)
++        assert num_sampled.data_ptr() % 16 == 0
++        assert num_rejected.data_ptr() % 16 == 0
++        assert combined.shape[1] >= num_reqs
++
++
++def test_warmup_pp_decode_update_matches_serving_specialization(monkeypatch):
++    calls = []
++    monkeypatch.setattr(model_runner, "post_update", lambda *args: calls.append(args))
++
++    runner = object.__new__(model_runner.GPUModelRunner)
++    runner.device = torch.device("cpu")
++    runner.pp_handler = Mock(max_sample_len=3)
++    runner.req_states = Mock()
++    runner.model_state = Mock()
++
++    runner.warmup_pp_decode_update()
++
++    assert len(calls) == 1
++    args = calls[0]
++    idx_mapping, _, _, output_bin_counts = args[:4]
++    sampled_tokens, num_sampled, num_rejected, query_start_loc = args[4:8]
++    assert len(args) == 10
++    assert idx_mapping.tolist() == [-1] and idx_mapping.dtype == torch.int64
++    assert output_bin_counts is None
++    assert query_start_loc is None
++    assert sampled_tokens.shape == (1, 3) and sampled_tokens.dtype == torch.int64
++    assert num_sampled.dtype == torch.int32
++    assert num_rejected.dtype == torch.int32
++    runner.model_state.warmup_postprocess_state.assert_called_once_with(
++        idx_mapping,
++        num_sampled,
++        runner.req_states.num_computed_tokens.gpu,
++    )
++
++
++@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA stream")
++def test_broadcast_pads_plain_sampler_rows_to_max_sample_len(monkeypatch):
++    sent = []
++    monkeypatch.setattr(
++        pp_utils.torch.distributed,
++        "broadcast",
++        lambda tensor, **kw: sent.append(tensor),
++    )
++    handler = _cuda_handler()
++    batch = _batch(num_computed=[10], prefill_len=[8], num_scheduled=[1])
++
++    handler.broadcast(
++        torch.zeros(1, 1, dtype=torch.int64, device="cuda"),
++        torch.ones(1, dtype=torch.int32, device="cuda"),
++        torch.zeros(1, dtype=torch.int32, device="cuda"),
++        batch,
++    )
++
++    assert sent[0].shape == (1, 6)
++    assert sent[1].shape == (2, 4)
++    torch.accelerator.synchronize()
+diff --git a/vllm/v1/engine/core.py b/vllm/v1/engine/core.py
+index b36caf092cac..9d3193777d0f 100644
+--- a/vllm/v1/engine/core.py
++++ b/vllm/v1/engine/core.py
+@@ -876,7 +876,9 @@ def _reset_caches(
+ 
+     def _finish_pause(self, clear_cache: bool) -> None:
+         # A completed pause promises an idle device: nothing else waits on
+-        # the last dummy batch an idle DP rank launches.
++        # the last dummy batch an idle DP rank launches. Post deferred PP
++        # receives before synchronizing so the matching sender can complete.
++        self.model_executor.collective_rpc("flush_pending_collectives")
+         self.model_executor.collective_rpc("synchronize_device")
+         if clear_cache:
+             self._reset_caches()
+diff --git a/vllm/v1/worker/gpu/model_runner.py b/vllm/v1/worker/gpu/model_runner.py
+index c4dbe2584395..403367ede77b 100644
+--- a/vllm/v1/worker/gpu/model_runner.py
++++ b/vllm/v1/worker/gpu/model_runner.py
+@@ -316,6 +316,7 @@ def __init__(self, vllm_config: VllmConfig, device: torch.device):
+                 max_num_reqs=self.max_num_reqs,
+                 num_speculative_steps=self.num_speculative_steps,
+                 device=self.device,
++                async_scheduling=self.scheduler_config.async_scheduling,
+             )
+ 
+         # Samplers and decode_query_len created in load_model() after
+@@ -1108,6 +1109,39 @@ def update_pp_decode_requests(self):
+             if outputs is not None:
+                 self.postprocess_sampled(**outputs)
+ 
++    def warmup_pp_decode_update(self) -> None:
++        """JIT-compile kernels behind ``update_pp_decode_requests``.
++
++        This path only runs on real steps, so non-last PP ranks otherwise hit
++        its first Triton compilation while a sampled-token collective is in
++        flight. An all -1 mapping exercises the serving specialization without
++        updating request state.
++        """
++        assert self.pp_handler is not None
++        idx_mapping = torch.full((1,), -1, dtype=torch.int64, device=self.device)
++        num_sampled = torch.zeros(1, dtype=torch.int32, device=self.device)
++        post_update(
++            idx_mapping,
++            self.req_states.num_computed_tokens.gpu,
++            self.req_states.last_sampled_tokens,
++            None,
++            torch.zeros(
++                (1, self.pp_handler.max_sample_len),
++                dtype=torch.int64,
++                device=self.device,
++            ),
++            num_sampled,
++            torch.zeros(1, dtype=torch.int32, device=self.device),
++            None,
++            self.req_states.all_token_ids.gpu,
++            self.req_states.total_len.gpu,
++        )
++        self.model_state.warmup_postprocess_state(
++            idx_mapping,
++            num_sampled,
++            self.req_states.num_computed_tokens.gpu,
++        )
++
+     def add_requests(self, scheduler_output: SchedulerOutput) -> None:
+         for new_req_data in scheduler_output.scheduled_new_reqs:
+             assert new_req_data.prefill_token_ids is not None
+@@ -1637,7 +1671,9 @@ def execute_model(
+                     scheduler_output.aux_output_connector_metadata
+                 )
+             if scheduler_output.total_num_scheduled_tokens == 0:
+-                # No need to run the model.
++                # No model work follows, so post any receive selected above.
++                if self.pp_handler is not None:
++                    self.pp_handler.launch_post_model_receive()
+                 empty_output = self.kv_connector.no_forward(scheduler_output)
+                 return self._merge_ec_connector_no_forward(
+                     scheduler_output, empty_output
+@@ -1691,6 +1727,8 @@ def execute_model(
+ 
+         if batch_desc.num_tokens == 0:
+             # All DP ranks have zero tokens to run.
++            if not dummy_run and self.pp_handler is not None:
++                self.pp_handler.launch_post_model_receive()
+             empty_output = self.kv_connector.no_forward(scheduler_output)
+             return self._merge_ec_connector_no_forward(scheduler_output, empty_output)
+ 
+@@ -1968,6 +2006,10 @@ def execute_model(
+             cudagraph_stats=cudagraph_stats,
+         )
+ 
++        if not dummy_run and self.pp_handler is not None:
++            # Place the sampled-result receive after this rank's model kernels.
++            self.pp_handler.launch_post_model_receive()
++
+         if not self.is_last_pp_rank:
+             # Non-last PP rank: return IntermediateTensors for sending.
+             assert output_intermediate_tensors is not None
+@@ -2222,6 +2264,8 @@ def postprocess_num_computed_tokens(self, input_batch: InputBatch) -> None:
+     def shutdown(self) -> None:
+         """Release GPU tensors (model weights, KV caches, workspace) so that
+         memory is reclaimable when running in the same process."""
++        if self.pp_handler is not None:
++            self.pp_handler.flush_pending_collectives()
+         torch.accelerator.synchronize()
+         if self.aux_output_connector is not None:
+             self.aux_output_connector.close()
+diff --git a/vllm/v1/worker/gpu/model_states/interface.py b/vllm/v1/worker/gpu/model_states/interface.py
+index ee3e519a6e74..dbda5fdbc4e7 100644
+--- a/vllm/v1/worker/gpu/model_states/interface.py
++++ b/vllm/v1/worker/gpu/model_states/interface.py
+@@ -155,6 +155,15 @@ def postprocess_state(
+     ) -> None:
+         return None
+ 
++    def warmup_postprocess_state(
++        self,
++        idx_mapping: torch.Tensor,
++        num_sampled: torch.Tensor,
++        num_computed_tokens: torch.Tensor,
++    ) -> None:
++        """Warm kernels used only by model-specific postprocessing."""
++        return None
++
+     @abstractmethod
+     def prepare_inputs_embeds(
+         self,
+diff --git a/vllm/v1/worker/gpu/model_states/mamba_hybrid.py b/vllm/v1/worker/gpu/model_states/mamba_hybrid.py
+index 2b73b55bac7a..70baf3356a41 100644
+--- a/vllm/v1/worker/gpu/model_states/mamba_hybrid.py
++++ b/vllm/v1/worker/gpu/model_states/mamba_hybrid.py
+@@ -399,6 +399,28 @@ def postprocess_state(
+                 idx_mapping,
+             )
+ 
++    def warmup_postprocess_state(
++        self,
++        idx_mapping: torch.Tensor,
++        num_sampled: torch.Tensor,
++        num_computed_tokens: torch.Tensor,
++    ) -> None:
++        """Compile PP state-update kernels without mutating request state."""
++        _scatter_num_accepted_kernel[(idx_mapping.shape[0],)](
++            idx_mapping,
++            num_sampled,
++            self.num_accepted_tokens_gpu,
++        )
++        if self._align_mode:
++            assert self._mamba_ctx is not None
++            self._mamba_ctx.run_fused_postprocess_align(
++                idx_mapping.shape[0],
++                self.num_accepted_tokens_gpu,
++                self._mamba_state_idx_gpu,
++                num_computed_tokens,
++                idx_mapping,
++            )
++
+ 
+ @triton.jit
+ def _scatter_num_accepted_kernel(
+diff --git a/vllm/v1/worker/gpu/pp_utils.py b/vllm/v1/worker/gpu/pp_utils.py
+index 0a246c98ce16..99591689bb4f 100644
+--- a/vllm/v1/worker/gpu/pp_utils.py
++++ b/vllm/v1/worker/gpu/pp_utils.py
+@@ -20,9 +20,11 @@
+ class PendingRecv:
+     """Per-step slot data for a deferred postprocess on the main stream."""
+ 
+-    event: torch.cuda.Event
++    event: torch.cuda.Event | None
+ 
+     sampled_tokens: torch.Tensor  # [num_reqs, max_sample_len]
++    combined: torch.Tensor  # [2, padded_num_reqs]: broadcast backing storage
++    # Views into `combined`; a deferred broadcast updates them in place.
+     num_sampled: torch.Tensor  # [num_reqs]
+     num_rejected: torch.Tensor  # [num_reqs]
+     idx_mapping: torch.Tensor  # [num_reqs]
+@@ -33,6 +35,9 @@ class PendingRecv:
+     # detect requests aborted since then.
+     gen_at_receive_np: np.ndarray  # [num_reqs]
+     draft_tokens: torch.Tensor | None = None  # [num_reqs, num_speculative_steps]
++    # `record_event()` returns None for the CPU stream placeholder, so event
++    # presence cannot be used to determine whether collectives were posted.
++    launched: bool = False
+ 
+ 
+ def compute_need_sampled_mask(input_batch: InputBatch) -> np.ndarray | None:
+@@ -47,6 +52,17 @@ def compute_need_sampled_mask(input_batch: InputBatch) -> np.ndarray | None:
+     return produces_sample if produces_sample.any() else None
+ 
+ 
++def _alloc_combined(num_reqs: int, device: torch.device) -> torch.Tensor:
++    """Allocate the (2, N) int32 buffer broadcast with sampled tokens.
++
++    Pad the inner dimension to keep both unbound views 16-byte aligned. Triton
++    specializes on pointer alignment, so this avoids a first-use compilation
++    while a deferred collective is outstanding. Sender and receivers must use
++    the same allocation shape.
++    """
++    return torch.empty(2, -(-num_reqs // 4) * 4, dtype=torch.int32, device=device)
++
++
+ class PPHandler:
+     """Runs the PP sampled-token broadcast/recv on a side stream so the
+     default stream isn't gated by the matching peer call. Step T's recv is
+@@ -54,26 +70,42 @@ class PPHandler:
+ 
+     Uses a dedicated NCCL communicator (sibling of the PP `device_group`)
+     for the broadcast so it does not serialize on the wire with the
+-    inter-stage hidden-state p2p send/recv ops.
++    inter-stage hidden-state p2p send/recv ops. The last rank still posts
++    immediately; its sends queue on `broadcast_stream`, so only the head send
++    can be active while waiting for delayed receivers. Every device-sync
++    boundary must therefore flush the PP group collectively first.
+     """
+ 
+     def __init__(
+-        self, max_num_reqs: int, num_speculative_steps: int, device: torch.device
++        self,
++        max_num_reqs: int,
++        num_speculative_steps: int,
++        device: torch.device,
++        async_scheduling: bool | None,
+     ):
+-        self.is_last_rank = get_pp_group().is_last_rank
+-        self.last_rank = get_pp_group().last_rank
++        assert async_scheduling is not None, "async scheduling must be resolved"
++        pp_group = get_pp_group()
++        self.is_last_rank = pp_group.is_last_rank
++        self.last_rank = pp_group.last_rank
+         self.max_sample_len = num_speculative_steps + 1
+         self.num_speculative_steps = num_speculative_steps
+         self.device = device
+         self.main_stream = torch.cuda.current_stream(device)
+         self.broadcast_stream = torch.cuda.Stream(device)
+ 
+-        # On non-last ranks, a FIFO with one entry per in-flight step: the entry
+-        # pushed by step T's `receive` is consumed pp_size steps later. Pre-seeded
+-        # with pp_size None placeholders so the first pp_size consumes are no-ops.
+-        # None means no postprocess is pending for that step (broadcast skipped).
+-        # Only XPU can disable microbatching via VLLM_XPU_PP_MICROBATCH.
+-        ring_depth = get_pp_group().world_size
++        self.deferred_recv_launch_delay = 0
++        if not self.is_last_rank and async_scheduling and current_platform.is_cuda():
++            self.deferred_recv_launch_delay = pp_group.world_size - 1
++        # Keep warmup behavior unchanged; the worker enables the delay only
++        # after compilation and graph capture are complete.
++        self.recv_launch_delay = 0
++        self.pending_post_model_receive: PendingRecv | None = None
++
++        # On non-last ranks, one FIFO entry per in-flight step. The entry from
++        # step T is consumed pp_size steps later. The last rank posts its send
++        # immediately and therefore needs no queue. Preserve XPU's upstream
++        # single-slot behavior when PP microbatching is explicitly disabled.
++        ring_depth = pp_group.world_size
+         if current_platform.is_xpu() and not envs.VLLM_XPU_PP_MICROBATCH:
+             ring_depth = 1
+         self.queue: deque[PendingRecv | None] = (
+@@ -86,11 +118,15 @@ def __init__(
+         self.req_idx_gen_np = np.zeros(max_num_reqs, dtype=np.int32)
+ 
+         # Dedicated subgroup for the sampled-token broadcast.
+-        self.broadcast_group = get_pp_group().make_sibling_device_group(
++        self.broadcast_group = pp_group.make_sibling_device_group(
+             group_desc="pp_broadcast"
+         )
+         self.aux_hidden_state_relay_keys: tuple[str, ...] = ()
+ 
++    def enable_deferred_collectives(self) -> None:
++        """Enable the automatic receive delay after worker warmup."""
++        self.recv_launch_delay = self.deferred_recv_launch_delay
++
+     def on_req_idx_freed(self, req_idx: int) -> None:
+         self.req_idx_gen_np[req_idx] += 1
+ 
+@@ -117,6 +153,80 @@ def relay_aux_hidden_states(
+             }
+         )
+ 
++    def _launch_receive(self, slot: PendingRecv) -> None:
++        """Post one receiver's broadcasts exactly once."""
++        if slot.launched:
++            return
++        slot.launched = True
++        with torch.cuda.stream(self.broadcast_stream):
++            # Immediate receives retain upstream's stream dependency. Deferred
++            # receives are posted after a later step's model kernels, leaving
++            # the following step available to overlap the receive.
++            self.broadcast_stream.wait_stream(self.main_stream)
++            torch.distributed.broadcast(
++                slot.sampled_tokens,
++                src=self.last_rank,
++                group=self.broadcast_group,
++            )
++            torch.distributed.broadcast(
++                slot.combined,
++                src=self.last_rank,
++                group=self.broadcast_group,
++            )
++            if slot.draft_tokens is not None:
++                torch.distributed.broadcast(
++                    slot.draft_tokens,
++                    src=self.last_rank,
++                    group=self.broadcast_group,
++                )
++            slot.event = self.broadcast_stream.record_event()
++            # The tensors are populated on the broadcast stream and consumed
++            # later on the main stream.
++            slot.sampled_tokens.record_stream(self.main_stream)
++            slot.combined.record_stream(self.main_stream)
++            if slot.draft_tokens is not None:
++                slot.draft_tokens.record_stream(self.main_stream)
++
++    def _advance_receive_queue(self) -> PendingRecv | None:
++        if self.recv_launch_delay:
++            launch_slot = self.queue[-self.recv_launch_delay]
++            if launch_slot is not None:
++                if self.pending_post_model_receive is not None:
++                    # Preserve collective order if the prior launch was missed.
++                    self._launch_receive(self.pending_post_model_receive)
++                self.pending_post_model_receive = launch_slot
++
++        due_slot = self.queue.popleft()
++        # Reserve this step's slot; receive() overwrites it if applicable.
++        self.queue.append(None)
++        return due_slot
++
++    def launch_post_model_receive(self) -> None:
++        """Post the selected receive behind this step's model kernels."""
++        slot = self.pending_post_model_receive
++        if slot is None:
++            return
++        self.pending_post_model_receive = None
++        self._launch_receive(slot)
++
++    def flush_pending_collectives(self) -> None:
++        """Post all deferred receives before an idle boundary or shutdown.
++
++        Every non-last rank in the PP group must call this at the same logical
++        boundary. The matching broadcasts are ordered collectives, so a
++        rank-local flush condition could desynchronize the group and hang it.
++        """
++        if self.is_last_rank:
++            return
++
++        if self.pending_post_model_receive is not None:
++            pending_slot = self.pending_post_model_receive
++            self.pending_post_model_receive = None
++            self._launch_receive(pending_slot)
++        for queued_slot in self.queue:
++            if queued_slot is not None and not queued_slot.launched:
++                self._launch_receive(queued_slot)
++
+     def get_prev_sampled_outputs(
+         self, draft_tokens_to_update: torch.Tensor | None = None
+     ) -> dict[str, torch.Tensor] | None:
+@@ -125,12 +235,15 @@ def get_prev_sampled_outputs(
+         """
+         if not self.queue:
+             return None
+-        slot = self.queue.popleft()
+-        # Reserve this step's slot; `receive` overwrites it if applicable.
+-        self.queue.append(None)
++        slot = self._advance_receive_queue()
+         if slot is None:
+             return None
+ 
++        # Post before filtering. The last PP rank already posted the matching
++        # broadcasts, so even an all-excluded local step must participate.
++        self._launch_receive(slot)
++        assert slot.launched
++
+         # Skip requests which did not need sampled output and/or those already
+         # finished. The post_update kernel skips the -1 entries.
+         freed = self.req_idx_gen_np[slot.idx_mapping_np] != slot.gen_at_receive_np
+@@ -144,7 +257,8 @@ def get_prev_sampled_outputs(
+             idx_mapping_np = np.where(exclude_mask, -1, slot.idx_mapping_np)
+             idx_mapping = async_tensor_h2d(idx_mapping_np, device=self.device)
+ 
+-        self.main_stream.wait_event(slot.event)
++        if slot.event is not None:
++            self.main_stream.wait_event(slot.event)
+         if slot.draft_tokens is not None and draft_tokens_to_update is not None:
+             draft_tokens = slot.draft_tokens
+             draft_idx_mapping = slot.idx_mapping
+@@ -196,17 +310,14 @@ def receive(self, input_batch: InputBatch) -> bool:
+ 
+         num_reqs = input_batch.num_reqs
+         with torch.cuda.stream(self.broadcast_stream):
+-            self.broadcast_stream.wait_stream(self.main_stream)
+             sampled_tokens = torch.empty(
+                 num_reqs, self.max_sample_len, dtype=torch.int64, device=self.device
+             )
+-            combined = torch.empty(2, num_reqs, dtype=torch.int32, device=self.device)
+-            torch.distributed.broadcast(
+-                sampled_tokens, src=self.last_rank, group=self.broadcast_group
+-            )
+-            torch.distributed.broadcast(
+-                combined, src=self.last_rank, group=self.broadcast_group
+-            )
++            combined = _alloc_combined(num_reqs, self.device)
++            # These are views of the broadcast target. Creating them before a
++            # deferred broadcast is intentional: filling `combined` updates
++            # both views in place.
++            num_sampled, num_rejected = combined.unbind(dim=0)
+             draft_tokens = None
+             if self.num_speculative_steps > 0:
+                 draft_tokens = torch.empty(
+@@ -215,28 +326,21 @@ def receive(self, input_batch: InputBatch) -> bool:
+                     dtype=torch.int64,
+                     device=self.device,
+                 )
+-                torch.distributed.broadcast(
+-                    draft_tokens, src=self.last_rank, group=self.broadcast_group
+-                )
+-            event = self.broadcast_stream.record_event()
+-            num_sampled, num_rejected = combined.unbind(dim=0)
+-            # Must record_stream since these were allocated on broadcast stream but
+-            # later used on the main stream.
+-            sampled_tokens.record_stream(self.main_stream)
+-            combined.record_stream(self.main_stream)
+-            if draft_tokens is not None:
+-                draft_tokens.record_stream(self.main_stream)
+-        self.queue[-1] = PendingRecv(
+-            event,
+-            sampled_tokens,
+-            num_sampled,
+-            num_rejected,
+-            input_batch.idx_mapping,
+-            input_batch.idx_mapping_np,
+-            need_sampled_mask,
+-            gen_at_receive_np,
+-            draft_tokens,
++        slot = PendingRecv(
++            event=None,
++            sampled_tokens=sampled_tokens,
++            combined=combined,
++            num_sampled=num_sampled,
++            num_rejected=num_rejected,
++            idx_mapping=input_batch.idx_mapping,
++            idx_mapping_np=input_batch.idx_mapping_np,
++            need_sampled_mask=need_sampled_mask,
++            gen_at_receive_np=gen_at_receive_np,
++            draft_tokens=draft_tokens,
+         )
++        self.queue[-1] = slot
++        if self.recv_launch_delay == 0:
++            self._launch_receive(slot)
+         return bool(need_sampled_mask.all())
+ 
+     def broadcast(
+@@ -252,6 +356,8 @@ def broadcast(
+             return
+ 
+         assert sampled_token_ids.dtype == torch.int64
++        assert num_sampled.dtype == torch.int32
++        assert num_rejected.dtype == torch.int32
+ 
+         if current_platform.is_xpu():
+             self.main_stream.synchronize()
+@@ -261,13 +367,15 @@ def broadcast(
+             send_tokens = torch.nn.functional.pad(
+                 sampled_token_ids,
+                 (0, self.max_sample_len - sampled_token_ids.shape[-1]),
+-            )
++            ).contiguous()
+             torch.distributed.broadcast(
+-                send_tokens.contiguous(),
++                send_tokens,
+                 src=self.last_rank,
+                 group=self.broadcast_group,
+             )
+-            combined = torch.stack((num_sampled, num_rejected), dim=0)
++            combined = _alloc_combined(num_sampled.shape[0], self.device)
++            combined[0, : num_sampled.shape[0]] = num_sampled
++            combined[1, : num_sampled.shape[0]] = num_rejected
+             torch.distributed.broadcast(
+                 combined, src=self.last_rank, group=self.broadcast_group
+             )
+diff --git a/vllm/v1/worker/gpu/warmup.py b/vllm/v1/worker/gpu/warmup.py
+index 56f7d438fc3f..42530c37fafc 100644
+--- a/vllm/v1/worker/gpu/warmup.py
++++ b/vllm/v1/worker/gpu/warmup.py
+@@ -445,6 +445,11 @@ def _run_decode_step(indices: list[int], spec_flags: list[bool]) -> None:
+         for step_indices, step_spec_flags in decode_steps:
+             _run_decode_step(step_indices, step_spec_flags)
+ 
++    # The deferred PP post-update path only runs on real steps, so the steps
++    # above never JIT-compile its kernels on non-last ranks.
++    if not model_runner.is_last_pp_rank and model_runner.pp_handler is not None:
++        model_runner.warmup_pp_decode_update()
++
+     # Clean up - process finish_req_ids.
+     cleanup_output = SchedulerOutput.make_empty()
+     cleanup_output.finished_req_ids = set(req_ids)
+diff --git a/vllm/v1/worker/gpu_worker.py b/vllm/v1/worker/gpu_worker.py
+index def92f601dc8..6ca0e1201686 100644
+--- a/vllm/v1/worker/gpu_worker.py
++++ b/vllm/v1/worker/gpu_worker.py
+@@ -991,6 +991,10 @@ def compile_or_warm_up_model(self) -> CompilationTimes:
+         # gate so subsequent `execute_model` / `sample_tokens` calls enforce it.
+         enable_gpu_sync_check()
+ 
++        pp_handler = getattr(self.model_runner, "pp_handler", None)
++        if pp_handler is not None:
++            pp_handler.enable_deferred_collectives()
++
+         return CompilationTimes(
+             language_model=self.compilation_config.compilation_time,
+             encoder=self.compilation_config.encoder_compilation_time,
+@@ -1202,6 +1206,13 @@ def sample_tokens(
+     ) -> ModelRunnerOutput | AsyncModelRunnerOutput:
+         return self.model_runner.sample_tokens(grammar_output)
+ 
++    def flush_pending_collectives(self) -> None:
++        if not self.use_v2_model_runner:
++            return
++        pp_handler = self.model_runner.pp_handler  # type: ignore[attr-defined]
++        if pp_handler is not None:
++            pp_handler.flush_pending_collectives()
++
+     @torch.inference_mode()
+     @with_gpu_sync_check
+     def execute_model(
+@@ -1216,6 +1227,11 @@ def execute_model(
+ 
+         intermediate_tensors = None
+         forward_pass = scheduler_output.total_num_scheduled_tokens > 0
++        if not forward_pass and self.use_v2_model_runner:
++            # SchedulerOutput is replicated across PP ranks, so this flush
++            # boundary is group-uniform. The runner's zero-token launch is an
++            # additional safety net for direct runner invocations.
++            self.flush_pending_collectives()
+         num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
+         all_gather_tensors = {}
+         compilation_config = self.vllm_config.compilation_config
+diff --git a/vllm/v1/worker/worker_base.py b/vllm/v1/worker/worker_base.py
+index 017b1230cdac..2458fededaa4 100644
+--- a/vllm/v1/worker/worker_base.py
++++ b/vllm/v1/worker/worker_base.py
+@@ -132,6 +132,10 @@ def synchronize_device(self) -> None:
+         if torch.accelerator.is_available():
+             torch.accelerator.synchronize()
+ 
++    def flush_pending_collectives(self) -> None:
++        """Post deferred collectives before a cross-worker synchronization."""
++        return
++
+     def init_device(self) -> None:
+         """Initialize device state, such as loading the model or other on-device
+         memory allocations.

@@ -1,0 +1,39 @@
+{
+  "upstream": "https://github.com/vllm-project/vllm/pull/53948",
+  "upstream_head": "86bebb5",
+  "scope": "Adapted complete production protocol to installed runtime; preserves existing instrumentation",
+  "files": {
+    "v1/engine/core.py": {
+      "before": "a2aaa350f782ddc2297524dcb1dbd987ffce83cff934c2d79465b15a643879bf",
+      "after": "fe2b5a45587d6fdcf2ebbc37b811697573c05fb4da9dc2fa4f45fc8f7f0e1f21"
+    },
+    "v1/worker/gpu/model_runner.py": {
+      "before": "dbf71b9e20de467a39e7c9dd1262c3de5dcb3a6b514a97cb82ca221d2b8ba820",
+      "after": "24decd2f826a282a4f0bea02cfeb6cffaa3363b016b2c7c33188d88c4cf7d6c7"
+    },
+    "v1/worker/gpu/model_states/interface.py": {
+      "before": "5675b6fedc7403a9ab410b1e5565974e78fac23c42ab4253ae1da52d6e09b594",
+      "after": "527d9c79b63192f20bed73791abf3c44cd222fb25fb665d0dba93a223cd73f90"
+    },
+    "v1/worker/gpu/model_states/mamba_hybrid.py": {
+      "before": "573e130ac5587d4822fabf97adad1ad0fda02ff83c5e70df879a5bb175ae845c",
+      "after": "75e5660b6be5376c762f6d483374c080e8666427575ae017b2474747aeddab96"
+    },
+    "v1/worker/gpu/pp_utils.py": {
+      "before": "bde526ae73ba7c8406f7dc3728d5bc5cc14bf56093e5d0fce7e0900d21d2f02d",
+      "after": "f87d647099d4bc85110ad4a426cafc6732a0861fa26a5e2625f0b031c3dedb12"
+    },
+    "v1/worker/gpu/warmup.py": {
+      "before": "423ac32d58fe008c228cfa223e4fcebfcf87e3463a9dbdf80a083c0578d73723",
+      "after": "4e730c238a90985e3712962c63e95eef280a80438e6b9924ad562a4ad3877621"
+    },
+    "v1/worker/gpu_worker.py": {
+      "before": "36bc45ba6972b825081f081f5c84de26d0454f465a76e8a60748a8fd84fc1d72",
+      "after": "71862984fcdc381787699d1c488ce9d3daf0d05fa5faa711b38dbcb00e627431"
+    },
+    "v1/worker/worker_base.py": {
+      "before": "f0958160b39e23971d1fd9f174f83b1c484b0443d8ab8bd0d494b06807cf403e",
+      "after": "8576e5c32e9f2c096495954cb75847e8ccc0ea44b11ddbdc0571d1ea99194e90"
+    }
+  }
+}

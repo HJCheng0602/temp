@@ -1,0 +1,71 @@
+--- model.before.py
++++ /home/admin/dsv41-vllm-20260917/env/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/model.py
+@@ -81,6 +81,7 @@
+ from ..common.engram import EngramLayout, NgramHashState
+ from ..common.mm_preprocess import IMAGE_SENTINEL_BASE_ID, image_sentinel_mask
+ from .engram import Engram, gather_engram_hashes
++from . import pp_replay
+ from .ops.mega_mhc import mhc_shifted_post_pre
+ 
+ if typing.TYPE_CHECKING:
+@@ -529,6 +530,10 @@
+ 
+         self.engram_layout = EngramLayout.from_config(config)
+ 
++        pp_replay.prepare(
++            self, vllm_config, prefix, _select_dsv4_attn_cls(vllm_config),
++            aux_stream_list,
++        )
+         self.start_layer, self.end_layer, self.layers = make_layers(
+             config.num_hidden_layers,
+             lambda prefix: DeepseekV4DecoderLayer(
+@@ -541,6 +546,8 @@
+             ),
+             prefix=f"{prefix}.layers",
+         )
++
++        pp_replay.attach(self)
+ 
+         # The n-gram hash needs a slot-keyed rolling store of compressed ids
+         # (chunked prefill / decode lookback); key it off the first local
+@@ -606,6 +613,7 @@
+                     dtype=dtype,
+                     device=device,
+                 ),
++                **pp_replay.empty_inputs(self, batch_size, dtype, device),
+                 # V4 MoE routing needs token ids on every PP stage.
+                 "input_ids": torch.zeros(
+                     (batch_size,), dtype=torch.int32, device=device
+@@ -639,6 +647,7 @@
+             # the stage output so vision/hash MoE routing remains valid.
+             input_ids = intermediate_tensors["input_ids"]
+ 
++        pp_replay.receive(self, positions, intermediate_tensors)
+         pp_input_ids = input_ids
+         if self.use_mega_moe:
+             input_ids = input_ids.to(torch.int64)
+@@ -766,6 +775,7 @@
+                     "hidden_states": hidden_states,
+                     "pre_mix": pre_mix,
+                     "input_ids": pp_input_ids,
++                    **pp_replay.send(self),
+                 }
+             )
+ 
+@@ -824,6 +834,8 @@
+         )
+ 
+         for name, loaded_weight in weights:
++            if pp_replay.skip_weight(self, name):
++                continue
+             if name.startswith(("vision.", "aligner.", "image_")):
+                 # Vision weights are loaded by the outer multimodal wrapper.
+                 logger.warning_once("Skipping non-text weight: %s", name)
+@@ -969,6 +981,7 @@
+         A no-op for every other attention layer, and idempotent, so a second
+         post-load pass cannot permute twice.
+         """
++        pp_replay.finalize(self)
+         for layer in islice(self.layers, self.start_layer, self.end_layer):
+             finalize = getattr(layer.attn, "finalize_loaded_weights", None)
+             if finalize is not None:

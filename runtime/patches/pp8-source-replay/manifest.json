@@ -1,0 +1,8 @@
+{
+  "target": "/home/admin/dsv41-vllm-20260917/env/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/model.py",
+  "helper": "/home/admin/dsv41-vllm-20260917/env/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/pp_replay.py",
+  "enabled_by": "DSV41_PP_REPLAY=1",
+  "original_sha256": "b4eb7a7a020bdda6ebe843cd4e8a535912bb116886fd637a0bb9ea1c316e6e0c",
+  "patched_sha256": "50dbc5c21da791069500cefd97a7bbf56ecbc8a8e1ab23b17c16fee2bb332503",
+  "helper_sha256": "a7d7efb32567b8c8e6e65338a64c5bbe4e5189a621c567ec4d0b4ffa6cefbfbe"
+}

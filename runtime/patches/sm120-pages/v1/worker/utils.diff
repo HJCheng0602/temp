@@ -1,0 +1,31 @@
+--- /home/admin/dsv41-vllm-20260917/patches/sm120-pages/v1/worker/utils.py
++++ /home/admin/dsv41-vllm-20260917/env/lib/python3.12/site-packages/vllm/v1/worker/utils.py
+@@ -422,12 +422,23 @@
+ 
+     kv_caches: dict[str, torch.Tensor] = {}
+     for tensor in kv_cache_config.kv_cache_tensors:
+-        layer_name = tensor.layers[0]
+-        group_id, group = next(
+-            (group_id, group)
+-            for group_id, group in enumerate(kv_cache_config.kv_cache_groups)
+-            if layer_name in group.layer_names
++        # PP workers receive the global tensor layout but only the
++        # groups for their local layers. The tensor's first layer may
++        # belong to another stage, so select a local representative.
++        local_match = next(
++            (
++                (group_id, group, layer_name)
++                for layer_name in tensor.layers
++                for group_id, group in enumerate(
++                    kv_cache_config.kv_cache_groups
++                )
++                if layer_name in group.layer_names
++            ),
++            None,
+         )
++        if local_match is None:
++            continue
++        group_id, group, layer_name = local_match
+         spec = group.kv_cache_spec
+         if isinstance(spec, UniformTypeKVCacheSpecs):
+             spec = spec.kv_cache_specs[layer_name]

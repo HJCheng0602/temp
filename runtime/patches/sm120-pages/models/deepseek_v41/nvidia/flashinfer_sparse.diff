@@ -1,0 +1,35 @@
+--- /home/admin/dsv41-vllm-20260917/patches/sm120-pages/models/deepseek_v41/nvidia/flashinfer_sparse.py
++++ /home/admin/dsv41-vllm-20260917/env/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/flashinfer_sparse.py
+@@ -536,10 +536,19 @@
+             )
+ 
+ 
++class DeepseekV41SM120SparseBackend(DeepseekV4FlashInferMLASparseBackend):
++    @staticmethod
++    def get_supported_kernel_block_sizes() -> list[int | MultipleOf]:
++        # 64 compressed states: ratio 1 -> 64, ratio 2 -> 128 tokens.
++        return [128, 64]
++
++
+ class DeepseekV4FlashInferSM120Attention(DeepseekV4Attention):
+     """DeepSeek V4 sparse MLA attention through FlashInfer's SM120 kernels."""
+ 
+-    backend_cls = DeepseekV4FlashInferMLASparseBackend
++    swa_page_tokens = 64
++    compressed_page_states = 64
++    backend_cls = DeepseekV41SM120SparseBackend
+     swa_backend_cls = DeepseekSparseSWAFlashInferBackend
+     use_fp8_ds_mla_layout: ClassVar[bool] = True
+ 
+@@ -551,6 +560,11 @@
+     def _as_sparse_cache(kv_cache: torch.Tensor) -> torch.Tensor:
+         if kv_cache.dtype == torch.float8_e4m3fn:
+             kv_cache = kv_cache.view(torch.uint8)
++        # Block 0 is vLLM's reserved null block. SM120 maps masked -1
++        # indices there; NaNs left by dummy/warmup writes can survive
++        # zero attention weights in a partial tile's PV product.
++        # Clear only this unused page, before every real cache read.
++        kv_cache[0].zero_()
+         if kv_cache.dim() == 4:
+             return kv_cache
+         return kv_cache.unsqueeze(-2)

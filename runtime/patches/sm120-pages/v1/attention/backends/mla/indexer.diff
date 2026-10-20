@@ -1,0 +1,11 @@
+--- /home/admin/dsv41-vllm-20260917/patches/sm120-pages/v1/attention/backends/mla/indexer.py
++++ /home/admin/dsv41-vllm-20260917/env/lib/python3.12/site-packages/vllm/v1/attention/backends/mla/indexer.py
+@@ -260,6 +260,8 @@
+ 
+     @staticmethod
+     def get_supported_kernel_block_sizes() -> list[int | MultipleOf]:
++        if current_platform.is_device_capability_family(120):
++            return [128, 64]
+         return [64 if current_platform.is_device_capability_family(90) else 128]
+ 
+ 

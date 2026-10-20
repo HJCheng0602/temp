@@ -1,0 +1,7 @@
+{
+  "timed_requests": 14,
+  "real_projection_outputs_equal": true,
+  "nccl_projection_accuracy_passed": true,
+  "flashinfer_projection_accuracy_passed": null,
+  "flashinfer_default_repeat_accuracy_passed": null
+}

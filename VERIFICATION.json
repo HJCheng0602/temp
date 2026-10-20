@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-20",
+  "origin": "live developer container",
+  "source_files": 324,
+  "vllm_modified_files": 14,
+  "vllm_added_files": 3,
+  "pp_hashes_verified": 8,
+  "cpu_tests": {
+    "wave_scheduler": 9,
+    "deferred_receive": 4
+  },
+  "not_present_on_remote": [
+    "test_parallel_matrix.py"
+  ],
+  "new_gpu_benchmark": false,
+  "running_environment_overwritten": false
+}

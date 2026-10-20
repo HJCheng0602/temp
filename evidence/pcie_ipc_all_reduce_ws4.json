@@ -1,0 +1,68 @@
+{
+  "_metadata": {
+    "flashinfer_version": "0.7.1",
+    "cuda_version": "13.0",
+    "cublas_version": "13.1.1",
+    "cudnn_version": "92000",
+    "cudnn_frontend_version": "1.29.0",
+    "cutlass_dsl_version": "nvidia-cutlass-dsl-libs-base==4.7.1;nvidia-cutlass-dsl-libs-core==4.7.1;nvidia-cutlass-dsl-libs-cu12==4.7.1;nvidia-cutlass-dsl-libs-cu13==4.7.1;nvidia-cutlass-dsl==4.7.1",
+    "gpu": "NVIDIA RTX PRO 5000 72GB Blackwell"
+  },
+  "('flashinfer::pcie_ipc_all_reduce', 'PcieIpcAllReduceRunner', ((128, 5120),), (4, 4, 'rootcplx-noswitch', 128, 41943040, True, 'torch.bfloat16'))": [
+    "PcieIpcAllReduceRunner",
+    [
+      1,
+      96,
+      1024
+    ],
+    [
+      "cuda_graph_profile_replays",
+      1,
+      "l2_cache_policy",
+      "hot"
+    ]
+  ],
+  "('flashinfer::pcie_ipc_all_reduce', 'PcieIpcAllReduceRunner', ((2048, 5120),), (4, 4, 'rootcplx-noswitch', 128, 41943040, True, 'torch.bfloat16'))": [
+    "PcieIpcAllReduceRunner",
+    [
+      4,
+      4,
+      256
+    ],
+    [
+      "cuda_graph_profile_replays",
+      1,
+      "l2_cache_policy",
+      "hot"
+    ]
+  ],
+  "('flashinfer::pcie_ipc_all_reduce', 'PcieIpcAllReduceRunner', ((4096, 5120),), (4, 4, 'rootcplx-noswitch', 128, 41943040, True, 'torch.bfloat16'))": [
+    "PcieIpcAllReduceRunner",
+    [
+      4,
+      2,
+      256
+    ],
+    [
+      "cuda_graph_profile_replays",
+      1,
+      "l2_cache_policy",
+      "hot"
+    ]
+  ],
+  "('flashinfer::pcie_ipc_all_reduce', 'PcieIpcAllReduceRunner', ((8192, 5120),), (4, 4, 'rootcplx-noswitch', 128, 41943040, True, 'torch.bfloat16'))": [
+    "PcieIpcAllReduceRunner",
+    [
+      4,
+      2,
+      256
+    ],
+    [
+      "cuda_graph_profile_replays",
+      1,
+      "l2_cache_policy",
+      "hot"
+    ]
+  ],
+  "_generation": "e4b202930911eaa2fbe1ea90d7a522a1865bc33838a3eea412e7648286927107"
+}
